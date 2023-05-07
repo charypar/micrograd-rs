@@ -1,38 +1,74 @@
-mod value;
+pub mod nn;
+pub mod value;
 
+use rand::prelude::*;
+
+use nn::Mlp;
 use value::Value;
 
 fn main() {
-    let x1 = Value::new(2.0, "x1");
-    let x2 = Value::new(0.0, "x2");
+    let mut rng = thread_rng();
 
-    let w1 = Value::new(-3.0, "w1");
-    let w2 = Value::new(1.0, "w2");
+    let xs = [
+        [
+            Value::new(2.0, "x_1"),
+            Value::new(3.0, "x_2"),
+            Value::new(-1.0, "x_3"),
+        ],
+        [
+            Value::new(3.0, "x_1"),
+            Value::new(-1.0, "x_2"),
+            Value::new(0.5, "x_3"),
+        ],
+        [
+            Value::new(0.5, "x_1"),
+            Value::new(1.0, "x_2"),
+            Value::new(1.0, "x_3"),
+        ],
+        [
+            Value::new(1.0, "x_1"),
+            Value::new(1.0, "x_2"),
+            Value::new(-1.0, "x_3"),
+        ],
+    ];
+    let ys = [
+        Value::new(1.0, "y_1"),
+        Value::new(-1.0, "y_2"),
+        Value::new(-1.0, "y_3"),
+        Value::new(1.0, "y_4"),
+    ];
 
-    let b = Value::new(6.88137358, "b");
+    let mlp = Mlp::new(3, &[4, 4, 1], &mut rng);
 
-    let x1w1 = x1.clone() * w1;
-    let x2w2 = x2 * w2;
+    for i in 0..500 {
+        let ypred: Vec<_> = xs
+            .iter()
+            .map(|x| mlp.predict(x).expect("should predict")[0].clone())
+            .collect();
 
-    let x1w1x2w2 = x1w1 + x2w2;
-    let n = x1w1x2w2 + b.clone();
+        let loss = loss(&ys, &ypred);
 
-    let o = n.clone().tanh();
+        loss.backpropagate();
+        mlp.nudge_parameters(0.05);
 
-    println!("n: {} = {}, grad: {}", n.label(), n.value(), n.gradient());
-    println!("o: {} = {}, grad: {}", o.label(), o.value(), o.gradient());
+        let ypred_raw: Vec<_> = ypred.iter().map(|yp| yp.value()).collect();
 
-    o.backpropagate();
+        println!(
+            "Iteration {}, loss {}, prediction: {:?}",
+            i,
+            loss.value(),
+            ypred_raw
+        );
+    }
+}
 
-    println!("n: {} = {}, grad: {}", n.label(), n.value(), n.gradient());
-    println!("o: {} = {}, grad: {}", o.label(), o.value(), o.gradient());
+fn loss(ys: &[Value], ypred: &[Value]) -> Value {
+    let loss: Value = ypred
+        .iter()
+        .zip(ys)
+        .fold(Value::new(0.0, "0"), |sum, (ypred, y)| {
+            sum + (ypred.clone() - y.clone()).pow(2.0)
+        });
 
-    println!("b: {} = {}, grad: {}", b.label(), b.value(), b.gradient());
-    println!(
-        "x1: {} = {}, grad: {}",
-        x1.label(),
-        x1.value(),
-        x1.gradient()
-    );
-    println!("b: {} = {}, grad: {}", b.label(), b.value(), b.gradient());
+    loss
 }
